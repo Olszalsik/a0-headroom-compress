@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Headroom Stats Dashboard</title>
+  <script type="module" src="/plugins/headroom_compress/webui/dashboard-store.js"></script>
+  <style>
+    .dash-wrap { padding: 4px 6px 24px 6px; }
+    .dash-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+    .dash-header h2 { margin:0; font-size:16px; }
+    .dash-pill {
+      display:inline-block; padding:2px 8px; border-radius:999px;
+      background: var(--color-surface, #1f1f23); border:1px solid var(--color-border,#333);
+      font-size:11px; opacity:.85;
+    }
+    .dash-pill.on { color:#7ed957; }
+    .dash-pill.off { color:#e26d6d; }
+    .dash-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin:10px 0; }
+    .dash-card {
+      background: var(--color-surface, #1f1f23);
+      border:1px solid var(--color-border,#333);
+      border-radius:6px; padding:10px 12px;
+    }
+    .dash-card .lbl { font-size:11px; opacity:.65; text-transform:uppercase; letter-spacing:.05em; }
+    .dash-card .val { font-size:20px; font-weight:600; margin-top:4px; }
+    .dash-card .sub { font-size:11px; opacity:.6; margin-top:2px; }
+    .dash-table { width:100%; border-collapse: collapse; margin-top:6px; font-size:12px; }
+    .dash-table th, .dash-table td {
+      text-align:left; padding:4px 8px; border-bottom:1px solid var(--color-border,#2a2a30);
+    }
+    .dash-table th { opacity:.7; font-weight:500; }
+    .dash-actions { display:flex; gap:8px; margin:10px 0; flex-wrap:wrap; }
+    .dash-actions button {
+      padding:5px 10px; border-radius:4px; border:1px solid var(--color-border,#333);
+      background: var(--color-accent,#2a5adf); color:#fff; cursor:pointer; font-size:12px;
+    }
+    .dash-actions button.secondary { background:transparent; color:var(--color-text,#eee); }
+    .dash-actions select, .dash-actions input[type=number] {
+      padding:4px 6px; background: var(--color-surface,#1f1f23); color: var(--color-text,#eee);
+      border:1px solid var(--color-border,#333); border-radius:4px;
+    }
+  </style>
+</head>
+<body>
+  <div x-data>
+    <template x-if="$store.dashboardStore">
+      <div x-init="$store.dashboardStore.onOpen()" x-destroy="$store.dashboardStore.cleanup()" class="dash-wrap">
+        <div class="dash-header">
+          <h2>Headroom Stats</h2>
+          <span class="dash-pill" :class="$store.dashboardStore.toggleClass"
+            x-text="'plugin: ' + ($store.dashboardStore.toggleState || '?') + ' / headroom-ai: ' + ($store.dashboardStore.headroomAvailable === null ? '?' : ($store.dashboardStore.headroomAvailable ? 'yes' : 'no'))"></span>
+          <span class="dash-pill" x-text="'scope: ' + ($store.dashboardStore.scope || 'global')"></span>
+          <span class="dash-pill" x-text="'level: ' + ($store.dashboardStore.config?.level || 'balanced')"></span>
+        </div>
+
+        <div class="dash-actions">
+          <label>Window:
+            <select x-model.number="$store.dashboardStore.windowHours" @change="$store.dashboardStore.refresh()">
+              <option value="1">last 1 h</option>
+              <option value="24">last 24 h</option>
+              <option value="168">last 7 d</option>
+              <option value="720">last 30 d</option>
+              <option value="0">lifetime</option>
+            </select>
+          </label>
+          <button class="secondary" @click="$store.dashboardStore.refresh()">Refresh</button>
+          <button class="secondary" @click="$store.dashboardStore.prune()">Prune CCR (TTL)</button>
+        </div>
+
+        <div class="dash-grid">
+          <div class="dash-card">
+            <div class="lbl">Compression events</div>
+            <div class="val" x-text="$store.dashboardStore.fmt($store.dashboardStore.windowSummary?.count || 0)"></div>
+            <div class="sub" x-text="'lifetime: ' + $store.dashboardStore.fmt($store.dashboardStore.lifetimeSummary?.count || 0)"></div>
+          </div>
+          <div class="dash-card">
+            <div class="lbl">Input tokens</div>
+            <div class="val" x-text="$store.dashboardStore.fmt($store.dashboardStore.windowSummary?.input_tokens || 0)"></div>
+            <div class="sub" x-text="'lifetime: ' + $store.dashboardStore.fmt($store.dashboardStore.lifetimeSummary?.input_tokens || 0)"></div>
+          </div>
+          <div class="dash-card">
+            <div class="lbl">Output tokens</div>
+            <div class="val" x-text="$store.dashboardStore.fmt($store.dashboardStore.windowSummary?.output_tokens || 0)"></div>
+            <div class="sub" x-text="'lifetime: ' + $store.dashboardStore.fmt($store.dashboardStore.lifetimeSummary?.output_tokens || 0)"></div>
+          </div>
+          <div class="dash-card">
+            <div class="lbl">Tokens saved (window)</div>
+            <div class="val" x-text="$store.dashboardStore.fmt($store.dashboardStore.windowSummary?.saved_tokens || 0)"></div>
+            <div class="sub" x-text="'ratio: ' + $store.dashboardStore.ratioLabel"></div>
+          </div>
+          <div class="dash-card">
+            <div class="lbl">Avg duration</div>
+            <div class="val" x-text="($store.dashboardStore.windowSummary?.avg_duration_ms || 0).toFixed(1) + ' ms'"></div>
+          </div>
+          <div class="dash-card">
+            <div class="lbl">CCR entries</div>
+            <div class="val" x-text="$store.dashboardStore.fmt($store.dashboardStore.ccr?.count || 0)"></div>
+            <div class="sub" x-text="'saved: ' + $store.dashboardStore.fmt($store.dashboardStore.ccr?.saved_tokens || 0) + ' tokens'"></div>
+          </div>
+        </div>
+
+        <h3 style="margin:18px 0 6px 0; font-size:13px; opacity:.8;">Recent compression events</h3>
+        <table class="dash-table">
+          <thead>
+            <tr><th>when</th><th>source</th><th>in</th><th>out</th><th>saved</th><th>ms</th></tr>
+          </thead>
+          <tbody>
+            <template x-for="ev in $store.dashboardStore.events" :key="ev.id">
+              <tr>
+                <td x-text="$store.dashboardStore.fmtTime(ev.ts)"></td>
+                <td x-text="ev.source || '-'"></td>
+                <td x-text="$store.dashboardStore.fmt(ev.input_tokens)"></td>
+                <td x-text="$store.dashboardStore.fmt(ev.output_tokens)"></td>
+                <td x-text="$store.dashboardStore.fmt(ev.saved_tokens)"></td>
+                <td x-text="(ev.duration_ms || 0).toFixed(1)"></td>
+              </tr>
+            </template>
+            <tr x-show="!$store.dashboardStore.events.length"><td colspan="6" style="opacity:.6;">No events yet.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin:18px 0 6px 0; font-size:13px; opacity:.8;">Recent CCR entries (reversible originals)</h3>
+        <table class="dash-table">
+          <thead>
+            <tr><th>when</th><th>key</th><th>source</th><th>orig</th><th>comp</th><th>saved</th></tr>
+          </thead>
+          <tbody>
+            <template x-for="row in $store.dashboardStore.ccrRecent" :key="row.key">
+              <tr>
+                <td x-text="$store.dashboardStore.fmtTime(row.created_at)"></td>
+                <td><code x-text="row.key"></code></td>
+                <td x-text="row.source || '-'"></td>
+                <td x-text="$store.dashboardStore.fmt(row.original_tokens)"></td>
+                <td x-text="$store.dashboardStore.fmt(row.compressed_tokens)"></td>
+                <td x-text="$store.dashboardStore.fmt(row.original_tokens - row.compressed_tokens)"></td>
+              </tr>
+            </template>
+            <tr x-show="!$store.dashboardStore.ccrRecent.length"><td colspan="6" style="opacity:.6;">No CCR entries yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </div>
+</body>
+</html>

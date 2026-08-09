@@ -1,0 +1,109 @@
+# Default configuration for the Headroom Context Compression plugin.
+#
+# All settings can be overridden at three scopes (Agent Zero resolves them in
+# this priority order):
+#   1. Per-project:  <project>/.a0proj/agents/<profile>/plugins/headroom_compress/config.json
+#   2. Per-agent:    usr/agents/<profile>/plugins/headroom_compress/config.json
+#   3. Global:       usr/plugins/headroom_compress/config.json
+#   4. Defaults:     this file (loaded only if no config.json exists at the active scope)
+
+# Master switch - the plugin also honours Agent Zero's global / per-project /
+# per-agent toggle files (.toggle-1 / .toggle-0). If the plugin is toggled OFF
+# the compressor becomes a no-op and no tool is registered.
+enabled: false
+
+# Compression mode:
+#   safe   - deterministic local transforms only. No headroom-ai import, no LLM
+#            call, no network call. Best for testing and low-risk use.
+#   normal - current headroom-ai path, with full feature set and dependency risk.
+mode: safe
+
+# Normal-mode strategy. headroom-ai auto-selects per content type, but you can
+# pin a strategy here for predictable behaviour:
+#   auto        - let headroom-ai pick (default)
+#   smart_crusher - universal JSON compressor
+#   code        - AST-aware code compressor (needs headroom-ai[code] extra)
+#   kompress    - HuggingFace model (needs headroom-ai[ml] extra, big download)
+strategy: auto
+
+# Normal-mode compression aggressiveness. Maps to headroom-ai's compression levels:
+#   safe       - only collapse whitespace / minify, no lossy transforms
+#   balanced   - safe transforms + smart structure-aware summarisation (default)
+#   aggressive - max token savings, may drop detail
+level: balanced
+
+# Model hint passed to headroom-ai. Used to pick the right tokenizer. Pick the
+# model that Agent Zero is actually using for the chat completion.
+model_hint: gpt-4o
+
+# Automatically compress tool outputs that exceed this many estimated tokens
+# before they are added to the agent's context. Set to 0 to disable automatic
+# tool-output compression and only compress on explicit tool call.
+auto_compress_tool_outputs_min_tokens: 200
+
+# Automatically compress long chat history / message lists.
+auto_compress_history: true
+auto_compress_history_min_tokens: 4000
+
+# CCR (reversible compression) settings.
+# When enabled, headroom-ai stores the full original content in a local cache
+# and the LLM can retrieve it on demand via the headroom_retrieve tool.
+ccr_enabled: true
+ccr_backend: sqlite          # one of: sqlite, in_memory, redis
+ccr_path: ""                 # empty -> default plugin dir ccr.db
+ccr_ttl_days: 7              # auto-prune originals older than N days (0 = keep forever)
+
+# Stats collection. When on, the plugin records compression events to a local
+# sqlite file so the dashboard can show savings. Disable to skip the I/O.
+stats_enabled: true
+stats_path: ""               # empty -> default plugin dir stats.db
+
+# v0.3.0 - Tool-description shrinking (input-side, runs every LLM turn)
+shrink_tool_descriptions: true
+shrink_tool_descriptions_min_chars: 200
+shrink_tool_descriptions_max_chars: 800
+
+# v0.3.0 - Caveman bridge. When enabled, Headroom's stats dashboard can
+# attribute output-side savings to the Caveman prompt-pack plugin. The
+# bridge does NOT auto-install Caveman - the user must install Caveman
+# separately and toggle it on. Headroom only records the cooperation.
+caveman_bridge:
+  enabled: true
+  track_caveman_stats: true
+
+# Expose a `headroom_compress_text` tool the LLM can call on demand even when
+# automatic compression is off. Useful for the user to ask "compress this 50kB
+# log dump before you read it".
+expose_compress_tool: true
+
+# Safety: never compress system prompts, the initial agent role messages, or
+# the tool's own arguments. Always true, exposed here for visibility only.
+never_compress_system_prompts: true
+
+# Diagnostic surface for the user. If false, the plugin stays completely
+# silent (no toasts, no log lines). Default true so users can see it working.
+verbose: true
+
+# ---------------------------------------------------------------------------
+# Proxy mode (Phase 4)
+# ---------------------------------------------------------------------------
+# When enabled, the plugin starts a local `headroom proxy` subprocess that
+# sits between Agent Zero and the LLM API, transparently compressing every
+# request and response. No code changes to Agent Zero are required, but the
+# user must re-point their model provider's api_base to the proxy URL below
+# in the Model settings (e.g. http://127.0.0.1:8787).
+#
+# To use proxy mode:
+#   1. Set proxy.auto_start: true and click "Start proxy" in the settings UI.
+#   2. Open Settings -> Model and add/override the api_base to the proxy URL.
+#   3. All LLM calls will now route through the compression proxy.
+#
+# Proxy mode is opt-in and independent from the on-hook compression (the two
+# can be used together for double compression, or separately).
+proxy:
+  auto_start: false           # start the proxy automatically when the plugin loads
+  host: 127.0.0.1             # bind address (localhost only - do not expose externally)
+  port: 8787                  # bind port
+  mode: token                 # token (max savings) | cache (max prefix-cache hits)
+  binary: /opt/venv-a0/bin/headroom  # path to the headroom CLI binary
+  env: {}                     # extra env vars to set when starting the proxy
