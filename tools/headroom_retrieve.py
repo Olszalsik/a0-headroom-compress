@@ -41,6 +41,28 @@ class HeadroomRetrieve(Tool):
 
         ccr = CcrCache(cfg)
 
+        if action == "meta":
+            ccr_key = (self.args.get("ccr_key") or "").strip()
+            if not ccr_key:
+                return Response(
+                    message="headroom_retrieve: 'ccr_key' argument is required for action=meta.",
+                    break_loop=False,
+                )
+            meta = ccr.get_meta(ccr_key)
+            if meta is None:
+                return Response(
+                    message=f"CCR key '{ccr_key}' not found (or expired).",
+                    break_loop=False,
+                )
+            from usr.plugins.headroom_compress.helpers.ccr_cache import _format_age
+            meta["age_human"] = _format_age(float(meta.get("age_seconds") or 0))
+            return Response(
+                message="Headroom CCR metadata:\n\n```json\n"
+                + json.dumps(meta, indent=2, default=str)
+                + "\n```",
+                break_loop=False,
+            )
+
         if action == "stats":
             data = ccr.stats()
             return Response(

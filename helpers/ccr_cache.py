@@ -31,6 +31,39 @@ from typing import Any
 from usr.plugins.headroom_compress.helpers import config as _config
 
 
+
+
+def _iso_from_epoch(epoch: float) -> str:
+    """Best-effort ISO-8601 UTC string from a Unix epoch.
+    Falls back to the raw number on platforms where datetime fails.
+    """
+    try:
+        e = float(epoch or 0.0)
+    except (TypeError, ValueError):
+        return ""
+    if e <= 0.0:
+        return ""
+    try:
+        from datetime import datetime, timezone
+        return datetime.fromtimestamp(e, tz=timezone.utc).isoformat()
+    except Exception:  # noqa: BLE001
+        return f"{e:.0f}"
+
+
+def _format_age(seconds: float) -> str:
+    """Human-readable age string from a seconds count."""
+    s = int(max(0.0, seconds))
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m{s % 60}s"
+    if s < 86400:
+        h, rem = divmod(s, 3600)
+        return f"{h}h{rem // 60}m"
+    d, rem = divmod(s, 86400)
+    return f"{d}d{rem // 3600}h"
+
+
 class CcrCache:
     """Thread-safe CCR store keyed by 32-char sha256 prefixes."""
 
