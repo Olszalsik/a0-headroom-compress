@@ -245,87 +245,87 @@ class CcrCache:
             return before - len(self._mem)
 
     def get_meta(self, key: str) -> dict[str, Any] | None:
- """Return rich metadata for a CCR key without the full blob.
+        """Return rich metadata for a CCR key without the full blob.
 
- Returned dict (always safe to JSON-encode):
- - key: the CCR key
- - exists: True
- - original_tokens: tokens in the original blob
- - compressed_tokens: tokens in the compressed replacement (approximate)
- - size_bytes: byte length of the original (utf-8 encoded)
- - size_chars: character length of the original
- - age_seconds: seconds since the entry was stored
- - created_at: epoch seconds
- - created_at_iso: ISO-8601 UTC string for human display
- - source: optional source label passed at compression time
- - preview: first 400 chars of the original (truncated)
- - confidence: heuristic 0.0-1.0 quality estimate based on compression ratio
- - ratio: original_tokens / compressed_tokens (>= 1.0)
+        Returned dict (always safe to JSON-encode):
+        - key: the CCR key
+        - exists: True
+        - original_tokens: tokens in the original blob
+        - compressed_tokens: tokens in the compressed replacement (approximate)
+        - size_bytes: byte length of the original (utf-8 encoded)
+        - size_chars: character length of the original
+        - age_seconds: seconds since the entry was stored
+        - created_at: epoch seconds
+        - created_at_iso: ISO-8601 UTC string for human display
+        - source: optional source label passed at compression time
+        - preview: first 400 chars of the original (truncated)
+        - confidence: heuristic 0.0-1.0 quality estimate based on compression ratio
+        - ratio: original_tokens / compressed_tokens (>= 1.0)
 
- Returns None when the key is not found or expired.
- """
- with self._lock:
- entry = self._read_entry(key)
- if entry is None:
- return None
- blob_bytes, orig_tok, comp_tok, created_at, source = entry
- try:
- blob = blob_bytes.decode("utf-8", errors="replace")
- except Exception: # noqa: BLE001
- return None
- age = max(0.0, time.time() - float(created_at or 0.0))
- ratio = (orig_tok / comp_tok) if comp_tok else 1.0
- # Confidence: higher ratio = cleaner reversible compression. Clamp 0..1.
- confidence = max(0.0, min(1.0, 0.5 + 0.05 * (ratio - 1.0)))
- return {
- "key": key,
- "exists": True,
- "original_tokens": int(orig_tok or 0),
- "compressed_tokens": int(comp_tok or 0),
- "size_bytes": len(blob_bytes),
- "size_chars": len(blob),
- "age_seconds": int(age),
- "created_at": float(created_at or 0.0),
- "created_at_iso": _iso_from_epoch(float(created_at or 0.0)),
- "source": source or "",
- "preview": (blob[:400] + ("\u2026" if len(blob) > 400 else "")),
- "confidence": round(confidence, 3),
- "ratio": round(ratio, 3),
- }
+        Returns None when the key is not found or expired.
+        """
+        with self._lock:
+            entry = self._read_entry(key)
+            if entry is None:
+                return None
+            blob_bytes, orig_tok, comp_tok, created_at, source = entry
+            try:
+                blob = blob_bytes.decode("utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                return None
+            age = max(0.0, time.time() - float(created_at or 0.0))
+            ratio = (orig_tok / comp_tok) if comp_tok else 1.0
+            # Confidence: higher ratio = cleaner reversible compression. Clamp 0..1.
+            confidence = max(0.0, min(1.0, 0.5 + 0.05 * (ratio - 1.0)))
+            return {
+                "key": key,
+                "exists": True,
+                "original_tokens": int(orig_tok or 0),
+                "compressed_tokens": int(comp_tok or 0),
+                "size_bytes": len(blob_bytes),
+                "size_chars": len(blob),
+                "age_seconds": int(age),
+                "created_at": float(created_at or 0.0),
+                "created_at_iso": _iso_from_epoch(float(created_at or 0.0)),
+                "source": source or "",
+                "preview": (blob[:400] + ("…" if len(blob) > 400 else "")),
+                "confidence": round(confidence, 3),
+                "ratio": round(ratio, 3),
+            }
 
- def _read_entry(self, key: str) -> tuple | None:
- """Internal: read a raw entry tuple or None. Caller must hold the lock."""
- if self.backend == "sqlite" and self._db is not None:
- try:
- cur = self._db.execute(
- "SELECT blob, original_tokens, compressed_tokens, created_at, source "
- "FROM ccr WHERE key = ?",
- (key,),
- )
- row = cur.fetchone()
- if row is None:
- return None
- if self.ttl_days > 0 and (time.time() - (row[3] or 0.0)) > self.ttl_days * 86400:
- try:
- self._db.execute("DELETE FROM ccr WHERE key = ?", (key,))
- self._db.commit()
- except Exception: # noqa: BLE001
- pass
- return None
- return (row[0], row[1], row[2], row[3], row[4])
- except Exception as exc: # noqa: BLE001
- self._print(f"sqlite get_meta failed: {exc}")
- return None
- entry = self._mem.get(key)
- if entry is None:
- return None
- blob, ot, ct, ts, src = entry
- if self.ttl_days > 0 and (time.time() - ts) > self.ttl_days * 86400:
- self._mem.pop(key, None)
- return None
- return entry
+    def _read_entry(self, key: str) -> tuple | None:
+        """Internal: read a raw entry tuple or None. Caller must hold the lock."""
+        if self.backend == "sqlite" and self._db is not None:
+            try:
+                cur = self._db.execute(
+                    "SELECT blob, original_tokens, compressed_tokens, created_at, source "
+                    "FROM ccr WHERE key = ?",
+                    (key,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                if self.ttl_days > 0 and (time.time() - (row[3] or 0.0)) > self.ttl_days * 86400:
+                    try:
+                        self._db.execute("DELETE FROM ccr WHERE key = ?", (key,))
+                        self._db.commit()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return None
+                return (row[0], row[1], row[2], row[3], row[4])
+            except Exception as exc:  # noqa: BLE001
+                self._print(f"sqlite get_meta failed: {exc}")
+                return None
+        entry = self._mem.get(key)
+        if entry is None:
+            return None
+        blob, ot, ct, ts, src = entry
+        if self.ttl_days > 0 and (time.time() - ts) > self.ttl_days * 86400:
+            self._mem.pop(key, None)
+            return None
+        return entry
 
- def stats(self) -> dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """Aggregate counters for the dashboard: total entries, total original
         tokens, total compressed tokens."""
         with self._lock:
