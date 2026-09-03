@@ -8,7 +8,7 @@ active, and also compresses long assistant responses that accumulated.
 Agent Zero calls:
     await extension.call_extensions_async("message_loop_prompts_before", self, loop_data=...)
 
-We walk self.agent.history.messages and compress large text content in place.
+We walk self.agent.history.all_messages() and compress large text content in place.
 We NEVER touch:
   - system messages
   - the first user message (initial task)
@@ -97,7 +97,12 @@ class CompressHistory(Extension):
         if history is None:
             return
 
-        messages = getattr(history, "messages", None)
+        # v0.4.3 fix: History has no `.messages` attribute (that lives on
+        # Topic) -- this read None every turn and the whole history-walk
+        # compression feature was dead. Use History.all_messages(); the
+        # Message objects it returns are the live history entries, so the
+        # in-place msg.content rewrite below still sticks.
+        messages = history.all_messages()
         if not messages:
             return
 

@@ -22,6 +22,23 @@ Toggleable context compression for Agent Zero. Wraps the headroom library (LLM c
 
 - v2.5 banner CTA changed from `open-plugin-config:headroom_compress` (dead) to `open-modal:/usr/plugins/headroom_compress/webui/config.html` (works).
 
+## v0.4.3 Fixes (2026-09-03)
+
+- **Dead history reads (three hooks)**: `History` has NO `.messages`
+  attribute — it lives on `Topic` (helpers/history.py:185); the accessor is
+  `History.all_messages()` (helpers/history.py:455). Reading
+  `getattr(history, "messages", None)` returned None every time, so:
+  - `_10_compress_history` (message_loop_prompts_before) — the ENTIRE
+    old-history compression feature was dead since the hook was written
+    (every audit missed it; found by grep sweep in the third pass). Fixed
+    to `history.all_messages()`.
+  - `hist_add_before/_10_compress_user_message` — the initial-task guard I
+    added in v0.4.2 read the nonexistent attribute, fired unconditionally,
+    and made user-message compression a total no-op (my own regression).
+    Fixed the same way.
+  - `_05_auto_clarity` — the `_last_user_message` lookup was the same dead
+    read, so auto-clarity never saw the previous user turn. Fixed.
+
 ## v0.4.2 Audit Fixes (2026-09-03)
 
 - **One-turn-late compression**: compression hooks moved from `before_main_llm_call/` to `message_loop_prompts_before/`. In `agent.py:prepare_prompt()` the `message_loop_prompts_before` point fires BEFORE `history.output()` materializes the prompt, so compressed history now affects the CURRENT turn instead of the next one. The two remaining hooks (`_05_auto_clarity`, `_10_compress_history`) only read `agent.history`, so the move is behavior-preserving apart from timing. (`_20_shrink_tool_descriptions` was removed later the same day -- see below.)

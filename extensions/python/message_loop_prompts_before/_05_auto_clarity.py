@@ -87,7 +87,11 @@ def _last_user_message(agent: Any) -> str:
     """
     try:
         history = getattr(agent, "history", None)
-        messages = getattr(history, "messages", None) if history is not None else None
+        # v0.4.3 fix: History has no `.messages` attribute (that lives on
+        # Topic) -- this read None every time and the scan never ran, so
+        # the destructive-command safety gate never fired. Use
+        # History.all_messages().
+        messages = history.all_messages() if history is not None else []
         if not messages:
             return ""
         for msg in reversed(list(messages)):

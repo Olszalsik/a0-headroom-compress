@@ -90,9 +90,12 @@ class CompressUserMessageBefore(Extension):
         # (v0.4.2 audit: the docstring claimed this guard but the code
         # never had it; a >4000-token initial task would have been
         # compressed at add time.)
+        # v0.4.3 fix: History has no `.messages` attribute (that lives on
+        # Topic) -- the v0.4.2 guard read None every time and disabled the
+        # whole hook. Use History.all_messages().
         try:
             history = getattr(self.agent, "history", None)
-            messages = getattr(history, "messages", None) if history is not None else None
+            messages = history.all_messages() if history is not None else None
             if not messages:
                 return
         except Exception:
