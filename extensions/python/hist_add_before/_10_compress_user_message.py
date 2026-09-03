@@ -67,7 +67,7 @@ class CompressUserMessageBefore(Extension):
             return
         if ai:
             # Only compress user-side messages here. AI responses are handled by
-            # the before_main_llm_call history hook.
+            # the message_loop_prompts_before history hook.
             return
 
         cfg = _config.get_config(agent=self.agent)

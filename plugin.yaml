@@ -1,11 +1,11 @@
 name: a0_headroom_compress
-title: Headroom Context Compression
+title: Headroom Context Compression (CCR)
 description: >
   Toggleable context compression for Agent Zero. Wraps the headroom-ai library to
   shrink tool outputs, logs, RAG chunks, and chat history by 60-95% before they
   reach the LLM. Originals are kept in a local CCR cache and can be retrieved
   on demand. ON/OFF globally, per-project, and per-agent profile.
-version: 0.4.1
+version: 0.4.2
 # v2.2 of Agent Zero added the hist_add_before extension point and the
 # banners extension point. Both are wired up by this plugin.
 min_framework_version: 2.2.0

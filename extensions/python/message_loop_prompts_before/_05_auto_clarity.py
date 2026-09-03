@@ -1,6 +1,6 @@
 """Auto-clarity pass for Headroom Context Compression.
 
-Runs in `before_main_llm_call`. Detects destructive commands in the user
+Runs in `message_loop_prompts_before`. Detects destructive commands in the user
 message and sets a per-context skip flag so the compressor refuses to
 shrink that chat's context. Mirrors Caveman's auto-clarity rule on the
 input side so safety wins and cost wins.
@@ -121,4 +121,4 @@ class AutoClarity(Extension):
                 _clarity_store.set_skip(ctx_id, label)
                 _print("skip flag set for %s (label=%s)" % (ctx_id, label))
         except Exception as exc:
-            _print("before_main_llm_call error: %s" % exc)
+            _print("message_loop_prompts_before error: %s" % exc)

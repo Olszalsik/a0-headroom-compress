@@ -1,4 +1,4 @@
-"""History compression hook — runs before each main LLM call.
+"""History compression hook — runs in `message_loop_prompts_before`.
 
 This is the SECONDARY fix. The primary fix (tool-output compression) already
 catches new large outputs as they enter history. This hook catches OLD
@@ -6,7 +6,7 @@ uncompressed content already sitting in history from before the plugin was
 active, and also compresses long assistant responses that accumulated.
 
 Agent Zero calls:
-    await extension.call_extensions_async("before_main_llm_call", self, loop_data=...)
+    await extension.call_extensions_async("message_loop_prompts_before", self, loop_data=...)
 
 We walk self.agent.history.messages and compress large text content in place.
 We NEVER touch:

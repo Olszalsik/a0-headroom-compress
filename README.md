@@ -4,8 +4,8 @@ Toggleable context compression for Agent Zero. Wraps the [headroom-ai](https://g
 
 ## What's new in v0.3.0
 
-- **Tool-description shrinking** on every LLM turn via `extensions/python/before_main_llm_call/_20_shrink_tool_descriptions.py`. Trims `agent.tools[*].description` to a configurable budget (default 800 chars). Originals go into CCR so the LLM can pull them back. Even turns with zero tool calls now save input tokens.
-- **Caveman bridge** via `helpers/caveman_bridge.py`. Pairs Headroom (input compression) with the [Caveman prompt-pack](https://github.com/JuliusBrussee/caveman) (output compression) for 2-sided savings. The bridge does NOT auto-install Caveman - the user must do that themselves. Headroom only records the cooperation so the stats dashboard can attribute OUTPUT savings.
+- **Tool-description shrinking** on every LLM turn via `extensions/python/message_loop_prompts_before/_20_shrink_tool_descriptions.py`. Trims `agent.tools[*].description` to a configurable budget (default 800 chars). Originals go into CCR so the LLM can pull them back. Even turns with zero tool calls now save input tokens.
+- **Caveman bridge** via `helpers/caveman_bridge.py` + the `monologue_end` hook (`extensions/python/monologue_end/_30_caveman_bridge.py`), which records each Caveman-styled response into the stats store. Pairs Headroom (input compression) with the [Caveman prompt-pack](https://github.com/JuliusBrussee/caveman) (output compression) for 2-sided savings. The bridge does NOT auto-install Caveman - the user must do that themselves. Headroom only records the cooperation so the stats dashboard can attribute OUTPUT savings.
 - **Split stats dashboard**: `summary()` now returns `by_side` (input vs output) and `by_kind` buckets so the dashboard can show the multiplication effect. Verified empirically.
 - **Docker persistence**: `requirements.txt` (`headroom-ai>=0.27.0`) so the package survives container rebuilds.
 - **README rewrite** for v0.3 (this file).
@@ -16,7 +16,7 @@ Toggleable context compression for Agent Zero. Wraps the [headroom-ai](https://g
 - Safe mode (deterministic transforms, no network calls) is the recommended first-run
 - CCR reversible cache (sqlite, TTL = 7 days)
 - `compress_text` and `headroom_retrieve` tools the LLM can call on demand
-- `hist_add_tool_result` / `hist_add_before` / `before_main_llm_call` extension hooks
+- `hist_add_tool_result` / `hist_add_before` / `message_loop_prompts_before` extension hooks
 - `.toggle-0` / `.toggle-1` global + per-project + per-agent toggles
 - WebUI config modal + stats dashboard
 - v2.2 banner discovery + setup hint
@@ -49,7 +49,7 @@ The plugin is a true no-op when EITHER:
 In that case:
 - `compress_text()` returns the input byte-for-byte unchanged.
 - `headroom_retrieve()` returns `None` for any key.
-- The hooks (`hist_add_tool_result`, `hist_add_before`, `before_main_llm_call`) are early-return no-ops.
+- The hooks (`hist_add_tool_result`, `hist_add_before`, `message_loop_prompts_before`) are early-return no-ops.
 
 ## Docker persistence
 

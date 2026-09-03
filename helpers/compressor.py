@@ -8,7 +8,7 @@ API handlers, on-demand tools).
 
 v0.4.0 additions:
 - Per-chat override (helpers/per_chat.py) checked before any work.
-- Auto-clarity destructive-command skip (extensions/python/before_main_llm_call/_05_auto_clarity.py)
+- Auto-clarity destructive-command skip (extensions/python/message_loop_prompts_before/_05_auto_clarity.py)
   consumed before compression.
 """
 
