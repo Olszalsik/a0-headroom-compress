@@ -78,7 +78,13 @@ def _extract_text(content: Any) -> str:
 
 
 def _last_user_message(agent: Any) -> str:
-    """Best-effort: text of the most recent non-AI history message."""
+    """Best-effort: text of the most recent non-AI history message.
+
+    Tool-result messages (hist_add_tool_result stores {tool_name,
+    tool_result} dicts) extract to "" -- keep scanning past them so the
+    user's actual destructive-command message is still detected after the
+    first tool call of the task.
+    """
     try:
         history = getattr(agent, "history", None)
         messages = getattr(history, "messages", None) if history is not None else None
@@ -89,7 +95,10 @@ def _last_user_message(agent: Any) -> str:
                 continue
             if getattr(msg, "summary", None):
                 continue
-            return _extract_text(getattr(msg, "content", None))
+            text = _extract_text(getattr(msg, "content", None))
+            if text and text.strip():
+                return text
+            continue
     except Exception:
         return ""
     return ""

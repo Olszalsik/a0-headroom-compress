@@ -60,18 +60,11 @@ export const store = createStore("headroomStore", {
     return this.toggleState === "on" ? "on" : "off";
   },
 
-  // Maps a boolean checkbox to the numeric `auto_compress_tool_outputs_min_tokens`
-  // config field. Toggling the checkbox on sets the threshold to the default
-  // (200 tokens); toggling it off sets it to 0 which is the framework's
-  // "auto-compress disabled" sentinel.
-  get autoCompressToolOutputs() {
-    const v = this.config && this.config.auto_compress_tool_outputs_min_tokens;
-    return typeof v === "number" ? v > 0 : true;
-  },
-  set autoCompressToolOutputs(val) {
-    if (!this.config) return;
-    this.config.auto_compress_tool_outputs_min_tokens = val ? 200 : 0;
-  },
+  // v0.4.2: the autoCompressToolOutputs getter/setter was removed -- it read
+  // `this.config`, which this standalone store never receives (the framework
+  // settings modal exposes `config` only on its own scope), so the checkbox
+  // always showed checked and toggling did nothing. config.html now binds the
+  // checkbox directly to config.auto_compress_tool_outputs_min_tokens.
 
   // -----------------------------------------------------------------
   // Lifecycle

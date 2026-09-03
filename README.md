@@ -1,10 +1,9 @@
 # Headroom Context Compression v0.3.0
 
-Toggleable context compression for Agent Zero. Wraps the [headroom-ai](https://github.com/headroomlabs-ai/headroom) library to shrink tool outputs, history, tool descriptions, and chat messages by **60-95%** before they reach the LLM. Originals are stored in a local **CCR cache** (reversible) and can be retrieved on demand.
+Toggleable context compression for Agent Zero. Wraps the [headroom-ai](https://github.com/headroomlabs-ai/headroom) library to shrink tool outputs, history, and chat messages by **60-95%** before they reach the LLM. Originals are stored in a local **CCR cache** (reversible) and can be retrieved on demand.
 
 ## What's new in v0.3.0
 
-- **Tool-description shrinking** on every LLM turn via `extensions/python/message_loop_prompts_before/_20_shrink_tool_descriptions.py`. Trims `agent.tools[*].description` to a configurable budget (default 800 chars). Originals go into CCR so the LLM can pull them back. Even turns with zero tool calls now save input tokens.
 - **Caveman bridge** via `helpers/caveman_bridge.py` + the `monologue_end` hook (`extensions/python/monologue_end/_30_caveman_bridge.py`), which records each Caveman-styled response into the stats store. Pairs Headroom (input compression) with the [Caveman prompt-pack](https://github.com/JuliusBrussee/caveman) (output compression) for 2-sided savings. The bridge does NOT auto-install Caveman - the user must do that themselves. Headroom only records the cooperation so the stats dashboard can attribute OUTPUT savings.
 - **Split stats dashboard**: `summary()` now returns `by_side` (input vs output) and `by_kind` buckets so the dashboard can show the multiplication effect. Verified empirically.
 - **Docker persistence**: `requirements.txt` (`headroom-ai>=0.27.0`) so the package survives container rebuilds.

@@ -165,7 +165,9 @@
           <div class="headroom-grid">
             <label for="hr-auto-tool">Auto-compress tool outputs</label>
             <div>
-              <input type="checkbox" id="hr-auto-tool" x-model="$store.headroomStore.autoCompressToolOutputs" />
+              <input type="checkbox" id="hr-auto-tool"
+                :checked="config.auto_compress_tool_outputs_min_tokens > 0"
+                @change="config.auto_compress_tool_outputs_min_tokens = $event.target.checked ? 200 : 0" />
               <div class="headroom-help">
                 Compress tool outputs that exceed the threshold below. The LLM
                 still gets the compressed content + a CCR key it can call

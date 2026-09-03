@@ -101,35 +101,37 @@ class CavemanBridgeStats(Extension):
             reduction: float | None = None
 
             # Mirror caveman's own gating: per-chat state, defaulting to
-            # caveman's global config "enabled" (same default its
-            # monologue_end extension uses). Read lazily so caveman's
-            # config, not ours, decides whether it is actually active.
-            caveman_default_on = False
+            # caveman's global config (same defaults its monologue_end
+            # extension uses). Read lazily so caveman's config, not ours,
+            # decides whether it is actually active.
+            caveman_cfg: dict = {}
             try:
                 from helpers import plugins as plugins_helper
 
-                caveman_default_on = bool(
-                    (plugins_helper.get_plugin_config("caveman") or {}).get("enabled", False)
-                )
+                caveman_cfg = plugins_helper.get_plugin_config("caveman") or {}
             except Exception:  # noqa: BLE001
                 pass
+            caveman_default_on = bool(caveman_cfg.get("enabled", False))
+            caveman_default_level = str(caveman_cfg.get("level", "full") or "full")
 
+            # v0.4.2 audit fix: only record when caveman's state is readable
+            # for THIS chat. If the state module can't be imported (or the
+            # chat id is unavailable) we cannot confirm caveman is actually
+            # active — recording then would credit phantom savings.
             state = _load_caveman_state()
-            if state is not None and chat_id:
-                try:
-                    if not state.is_enabled(chat_id, caveman_default_on):
-                        return
-                    level = state.get_level(chat_id, "full")
-                    reduction = _FALLBACK_REDUCTION.get(level)
-                except Exception as exc:  # noqa: BLE001
-                    _print(f"caveman state read failed: {exc}")
+            if state is None or not chat_id:
+                return
+            try:
+                if not state.is_enabled(chat_id, caveman_default_on):
                     return
-            elif not chat_id:
-                # No chat id and no caveman state binding — cannot attribute.
+                level = state.get_level(chat_id, caveman_default_level)
+                reduction = _FALLBACK_REDUCTION.get(level)
+            except Exception as exc:  # noqa: BLE001
+                _print(f"caveman state read failed: {exc}")
                 return
 
             if reduction is None:
-                reduction = _FALLBACK_REDUCTION.get(level or "", 0.65)
+                reduction = _FALLBACK_REDUCTION.get(level or caveman_default_level, 0.65)
                 if level is None:
                     level = "unknown"
 
@@ -139,13 +141,18 @@ class CavemanBridgeStats(Extension):
             est_tokens = max(1, len(text) // 4)
             est_saved = int(est_tokens * reduction)
 
+            # Stats semantics: saved_tokens = max(0, input - output). Model
+            # the event as "full-length response would have been est_tokens;
+            # caveman actually produced est_tokens - est_saved" so the
+            # dashboard's saved column reflects the output-side savings
+            # (previously input=0/output=est_saved => saved=0, inert).
             _bridge.record_caveman_savings(
                 cfg,
                 source="monologue_end",
-                input_tokens=0,
-                output_tokens=est_saved,
+                input_tokens=est_tokens,
+                output_tokens=max(0, est_tokens - est_saved),
                 style_level=level,
-                details={"chars": len(text), "estimated": True},
+                details={"chars": len(text), "estimated": True, "saved": est_saved},
             )
         except Exception as exc:  # noqa: BLE001
             _print(f"monologue_end error: {exc}")

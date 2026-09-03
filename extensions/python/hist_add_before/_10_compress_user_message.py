@@ -84,6 +84,20 @@ class CompressUserMessageBefore(Extension):
         if content is None:
             return
 
+        # Keep the documented guarantee: never touch the very first user
+        # message (the initial task). When it's being added the history is
+        # still empty -- this hook fires BEFORE the message is appended.
+        # (v0.4.2 audit: the docstring claimed this guard but the code
+        # never had it; a >4000-token initial task would have been
+        # compressed at add time.)
+        try:
+            history = getattr(self.agent, "history", None)
+            messages = getattr(history, "messages", None) if history is not None else None
+            if not messages:
+                return
+        except Exception:
+            pass
+
         text = _extract_text(content)
         if not text:
             return

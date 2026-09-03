@@ -58,10 +58,9 @@ ccr_ttl_days: 7              # auto-prune originals older than N days (0 = keep 
 stats_enabled: true
 stats_path: ""               # empty -> default plugin dir stats.db
 
-# v0.3.0 - Tool-description shrinking (input-side, runs every LLM turn)
-shrink_tool_descriptions: true
-shrink_tool_descriptions_min_chars: 200
-shrink_tool_descriptions_max_chars: 800
+# v0.4.2: the tool-description shrinking hook was REMOVED -- it read
+# agent.tools, which does not exist in the framework (tool descriptions
+# come from agent.system.tool.*.md prompt files), so it was a silent no-op.
 
 # v0.3.0 - Caveman bridge. When enabled, Headroom's stats dashboard can
 # attribute output-side savings to the Caveman prompt-pack plugin. The

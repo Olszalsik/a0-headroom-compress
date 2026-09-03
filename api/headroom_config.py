@@ -1,6 +1,6 @@
 """headroom_config: return the merged, scope-aware plugin config.
 
-POST /api/plugins/headroom_stats/headroom_config
+POST /api/plugins/headroom_compress/headroom_config
 
 Used by the webui/headroom-store.js to populate the settings form with the
 currently effective settings (after project/agent-profile scope resolution).

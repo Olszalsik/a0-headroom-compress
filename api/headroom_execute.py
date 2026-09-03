@@ -1,6 +1,6 @@
 """headroom_execute: trigger the execute.py maintenance script via the API.
 
-POST /api/plugins/headroom_stats/headroom_execute
+POST /api/plugins/headroom_compress/headroom_execute
 
 Body: {"args": ["--upgrade", "--extras", "all"]}
 
