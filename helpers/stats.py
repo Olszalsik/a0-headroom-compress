@@ -40,8 +40,8 @@ class StatsRecorder:
 
     def _init_db(self) -> None:
         path = self._db_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
             self._db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=NORMAL")

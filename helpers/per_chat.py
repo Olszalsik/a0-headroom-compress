@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,10 @@ from usr.plugins.headroom_compress.helpers import config as _config
 
 PLUGIN_DIR = _config.PLUGIN_DIR
 STORE_PATH = PLUGIN_DIR / "cache" / "per_chat_overrides.json"
+
+# Serialises read-modify-write cycles on the overrides file so concurrent
+# API calls cannot lose each other's updates.
+_STORE_LOCK = threading.Lock()
 
 
 def _print(msg: str) -> None:
@@ -58,29 +63,38 @@ def is_enabled(context_id: str, default: bool = True) -> bool:
     return bool(entry.get("enabled", default))
 
 
+def get_override(context_id: str) -> dict[str, Any] | None:
+    """Return the raw override entry for a chat, or None when unset."""
+    if not context_id:
+        return None
+    return _read_all().get(context_id)
+
+
 def set_enabled(context_id: str, enabled: bool, note: str = "") -> dict[str, Any]:
     """Set the per-chat override. Returns the new entry."""
     if not context_id:
         raise ValueError("context_id required")
-    data = _read_all()
-    entry = {
-        "enabled": bool(enabled),
-        "updated_ts": time.time(),
-        "note": note or "",
-    }
-    data[context_id] = entry
-    _write_all(data)
+    with _STORE_LOCK:
+        data = _read_all()
+        entry = {
+            "enabled": bool(enabled),
+            "updated_ts": time.time(),
+            "note": note or "",
+        }
+        data[context_id] = entry
+        _write_all(data)
     _print("set %s -> enabled=%s" % (context_id, enabled))
     return entry
 
 
 def clear(context_id: str) -> bool:
-    data = _read_all()
-    if context_id in data:
-        del data[context_id]
-        _write_all(data)
-        _print("cleared override for %s" % context_id)
-        return True
+    with _STORE_LOCK:
+        data = _read_all()
+        if context_id in data:
+            del data[context_id]
+            _write_all(data)
+            _print("cleared override for %s" % context_id)
+            return True
     return False
 
 

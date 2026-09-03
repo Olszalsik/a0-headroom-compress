@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import sys
+import time
 from typing import Any
 
 from usr.plugins.headroom_compress.helpers import config as _config
@@ -45,10 +46,20 @@ def _get_per_chat():
 
 
 def _get_clarity():
+    """Return the shared auto-clarity flag store (helpers/clarity.py).
+
+    IMPORTANT: the flag store must live in a *helper* module, not in the
+    extension file. A0 loads extension files as synthetic modules (basename,
+    not in sys.modules), so importing the extension file via the package path
+    would create a second module instance with separate state and the skip
+    flag would never reach the compressor. helpers.clarity is imported via the
+    canonical usr.plugins package path by both the extension and us, so both
+    sides share one store.
+    """
     global _clarity
     if _clarity is None:
         try:
-            from usr.plugins.headroom_compress.extensions.python.before_main_llm_call import _05_auto_clarity as _mod
+            from usr.plugins.headroom_compress.helpers import clarity as _mod
             _clarity = _mod
         except Exception as exc:
             _print(f"auto-clarity module unavailable: {exc}")
@@ -161,15 +172,18 @@ def compress_text(
         pc = _get_per_chat()
         if pc is not None and not pc.is_enabled(context_id):
             return {**empty_result, "skipped_reason": "per_chat_disabled"}
-        ac = _get_clarity()
-        auto_clarity_label = None
-        if ac is not None:
-            try:
-                auto_clarity_label = ac.consume_skip_flag(context_id)
-            except Exception:
-                auto_clarity_label = None
-        if auto_clarity_label:
-            return {**empty_result, "skipped_reason": f"auto_clarity:{auto_clarity_label}"}
+        # Auto-clarity skip: never consulted for explicit (force=True) tool
+        # calls - the flag is meant to protect *automatic* compression only.
+        if not force:
+            ac = _get_clarity()
+            auto_clarity_label = None
+            if ac is not None:
+                try:
+                    auto_clarity_label = ac.consume_skip(context_id)
+                except Exception:
+                    auto_clarity_label = None
+            if auto_clarity_label:
+                return {**empty_result, "skipped_reason": f"auto_clarity:{auto_clarity_label}"}
 
     if not force:
         min_tokens = int(cfg.get("auto_compress_tool_outputs_min_tokens", 0) or 0)
@@ -192,9 +206,7 @@ def compress_text(
     original_tokens = _cheap_token_count(text)
     ccr_key = _ccr_key_for(text, source) if ccr is not None else None
 
-    started = time.perf_counter() if 'time' in dir() else 0.0
-    import time as _time
-    started = _time.perf_counter()
+    started = time.perf_counter()
     compressed: str | None = None
     err: str | None = None
 
@@ -219,18 +231,23 @@ def compress_text(
 
     if ccr is not None and ccr_key is not None and saved_tokens > 0:
         try:
-            ccr.put(ccr_key, text, source=source)
+            ccr.put(
+                ccr_key,
+                text,
+                original_tokens,
+                output_tokens,
+                source=source,
+            )
         except Exception:
             pass
 
     try:
         stats.record(
+            kind=source or "compress_text",
             source=source or "unknown",
-            original_tokens=original_tokens,
+            input_tokens=original_tokens,
             output_tokens=output_tokens,
-            mode=mode,
-            ccr_key=ccr_key,
-            elapsed_ms=int((_time.perf_counter() - started) * 1000),
+            duration_ms=int((time.perf_counter() - started) * 1000),
         )
     except Exception:
         pass
@@ -247,3 +264,31 @@ def compress_text(
         "mode": mode,
         "dry_run": bool(cfg.get("dry_run", False)),
     }
+
+
+def retrieve_original(ccr_key: str, agent: Any = None) -> str | None:
+    """Return the full original text stored in the CCR cache for `ccr_key`.
+
+    Used by the headroom_retrieve tool (action=get). Returns None when the
+    key is unknown, expired, or CCR is disabled - never raises.
+    """
+    if not ccr_key or not isinstance(ccr_key, str):
+        return None
+    key = ccr_key.strip()
+    # Tolerate the LLM pasting the key out of the hint line, e.g.
+    # "key=abc123" or "CCR key abc123".
+    for prefix in ("key=", "key ", "ccr key ", "ccr_key="):
+        if key.lower().startswith(prefix):
+            key = key[len(prefix):].strip()
+    key = key.split()[0] if key else ""
+    if not key:
+        return None
+    try:
+        cfg = _config.get_config(agent=agent)
+        if not cfg.get("ccr_enabled", True):
+            return None
+        ccr = CcrCache(cfg)
+        return ccr.get(key)
+    except Exception as exc:  # noqa: BLE001 - retrieval must never break the agent
+        _print(f"retrieve_original failed for {key[:8]}...: {exc}")
+        return None

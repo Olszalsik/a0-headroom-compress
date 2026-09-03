@@ -74,6 +74,25 @@ class CompressHistory(Extension):
         if min_tokens <= 0:
             return
 
+        # Auto-clarity: consume the destructive-command skip flag ONCE per
+        # turn, here, so it protects the whole history walk. If we let each
+        # per-message compress_text() call consume it instead, only the first
+        # large message would be protected and the rest would compress anyway.
+        # (compress_text also consults the flag for single-shot calls; after
+        # this consume it finds nothing, which is the desired outcome.)
+        try:
+            ctx_id = str(getattr(getattr(self.agent, "context", None), "id", "") or "")
+            if ctx_id:
+                from usr.plugins.headroom_compress.helpers import clarity as _clarity_store
+
+                skip_label = _clarity_store.consume_skip(ctx_id)
+                if skip_label:
+                    if cfg.get("verbose", True):
+                        _print(f"history compression skipped (auto_clarity:{skip_label})")
+                    return
+        except Exception:
+            pass
+
         history = getattr(self.agent, "history", None)
         if history is None:
             return

@@ -4,6 +4,18 @@ Runs in `before_main_llm_call`. Detects destructive commands in the user
 message and sets a per-context skip flag so the compressor refuses to
 shrink that chat's context. Mirrors Caveman's auto-clarity rule on the
 input side so safety wins and cost wins.
+
+Framework contract (helpers/extension.py): extensions are discovered by
+modules.load_classes_from_folder, which only picks up CLASSES subclassing
+helpers.extension.Extension. A bare module-level function is never discovered,
+so this must be a class.
+
+The skip flag itself lives in helpers/clarity.py - a shared helper module
+imported via the canonical `usr.plugins...` package path by BOTH this
+extension and the compressor. It must NOT live in this file: A0 loads
+extension files as synthetic modules (basename, not registered in sys.modules),
+so importing this file by package path would create a second module instance
+and the flag would never cross between the two.
 """
 
 from __future__ import annotations
@@ -11,6 +23,10 @@ from __future__ import annotations
 import re
 import sys
 from typing import Any
+
+from helpers.extension import Extension
+
+from usr.plugins.headroom_compress.helpers import clarity as _clarity_store
 
 PLUGIN_NAME = "headroom_compress"
 
@@ -33,8 +49,6 @@ _DESTRUCTIVE_PATTERNS: list[tuple[str, str]] = [
 
 _COMPILED = [(re.compile(pat, re.IGNORECASE), label) for pat, label in _DESTRUCTIVE_PATTERNS]
 
-_SKIP_FLAGS: dict[str, dict[str, Any]] = {}
-
 
 def _print(msg: str) -> None:
     sys.stderr.write("[headroom_compress/auto_clarity] %s\n" % msg)
@@ -51,9 +65,39 @@ def _detect(message: str) -> tuple[bool, str]:
     return False, ""
 
 
-def _resolve_context_id(agent_data: Any) -> str:
+def _extract_text(content: Any) -> str:
+    """Pull plain text out of a MessageContent value (str or dict)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        for key in ("content", "message", "text"):
+            val = content.get(key)
+            if isinstance(val, str):
+                return val
+    return ""
+
+
+def _last_user_message(agent: Any) -> str:
+    """Best-effort: text of the most recent non-AI history message."""
     try:
-        ctx = agent_data.get("context") if isinstance(agent_data, dict) else None
+        history = getattr(agent, "history", None)
+        messages = getattr(history, "messages", None) if history is not None else None
+        if not messages:
+            return ""
+        for msg in reversed(list(messages)):
+            if getattr(msg, "ai", False):
+                continue
+            if getattr(msg, "summary", None):
+                continue
+            return _extract_text(getattr(msg, "content", None))
+    except Exception:
+        return ""
+    return ""
+
+
+def _resolve_context_id(agent: Any) -> str:
+    try:
+        ctx = getattr(agent, "context", None)
         if ctx is not None and getattr(ctx, "id", None):
             return str(ctx.id)
     except Exception:
@@ -61,59 +105,20 @@ def _resolve_context_id(agent_data: Any) -> str:
     return ""
 
 
-def before_main_llm_call(agent: Any = None, agent_data: Any = None, *args, **kwargs) -> None:
-    """Headroom extension hook: set skip flag if message is destructive."""
-    try:
-        payload = agent_data if agent_data is not None else kwargs.get("data") or kwargs.get("agent_data")
-        if payload is None and agent is not None:
-            payload = getattr(agent, "agent_data", None) or getattr(agent, "data", None)
-        if payload is None:
-            return
-        ctx_id = _resolve_context_id(payload)
-        if not ctx_id:
-            return
-        history = payload.get("history") if isinstance(payload, dict) else None
-        if not history:
-            return
-        # Find the latest user message
-        last_user_text = ""
+class AutoClarity(Extension):
+    """Set a compression-skip flag when the latest user message is destructive."""
+
+    async def execute(self, loop_data: dict | None = None, **kwargs) -> None:
         try:
-            for msg in reversed(list(history)):
-                if isinstance(msg, dict) and msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    if isinstance(content, str):
-                        last_user_text = content
-                        break
-                    if isinstance(content, list):
-                        for part in content:
-                            if isinstance(part, dict) and part.get("type") == "text":
-                                last_user_text = part.get("text", "")
-                                break
-                        if last_user_text:
-                            break
-        except Exception:
-            return
-        matched, label = _detect(last_user_text)
-        if matched:
-            _SKIP_FLAGS[ctx_id] = {"label": label, "ts": __import__("time").time()}
-            _print("skip flag set for %s (label=%s)" % (ctx_id, label))
-    except Exception as exc:
-        _print("before_main_llm_call error: %s" % exc)
-
-
-def consume_skip_flag(context_id: str) -> str | None:
-    """Compressor calls this. Returns label and clears the flag."""
-    if not context_id:
-        return None
-    entry = _SKIP_FLAGS.pop(context_id, None)
-    if not entry:
-        return None
-    return str(entry.get("label", "destructive"))
-
-
-def clear_skip_flag(context_id: str) -> bool:
-    return _SKIP_FLAGS.pop(context_id, None) is not None
-
-
-def list_skip_flags() -> dict[str, dict[str, Any]]:
-    return {k: dict(v) for k, v in _SKIP_FLAGS.items()}
+            if not self.agent:
+                return
+            ctx_id = _resolve_context_id(self.agent)
+            if not ctx_id:
+                return
+            last_user_text = _last_user_message(self.agent)
+            matched, label = _detect(last_user_text)
+            if matched:
+                _clarity_store.set_skip(ctx_id, label)
+                _print("skip flag set for %s (label=%s)" % (ctx_id, label))
+        except Exception as exc:
+            _print("before_main_llm_call error: %s" % exc)

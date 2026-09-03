@@ -72,7 +72,7 @@ def install() -> None:
 
     _save_state({
         "installed": True,
-        "version": "0.2.0",
+        "version": "0.4.0",
     })
 
     # Ensure headroom-ai is installed in the framework runtime (Docker-restart safe).
@@ -169,7 +169,9 @@ def pre_update() -> dict[str, Any]:
     state that the new version might need to restore (CCR/SQLite paths, etc.).
     """
     state = _load_state()
-    state["snapshot_at"] = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    state["snapshot_at"] = (
+        __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+    )
     _print(f"pre_update() - snapshotting state: {state}")
     return state
 

@@ -24,7 +24,7 @@ class HeadroomPerChat(ApiHandler):
             action = str(data.get("action") or "list").strip().lower()
 
             if action == "list":
-                return {"ok": True, "overrides": _per_chat.list_overrides()}
+                return {"ok": True, "overrides": _per_chat.list_all()}
 
             if action == "get":
                 context_id = str(data.get("context_id") or "")
@@ -34,10 +34,10 @@ class HeadroomPerChat(ApiHandler):
                 context_id = str(data.get("context_id") or "")
                 if not context_id:
                     return Response({"ok": False, "error": "context_id required"}, 400)
-                entry = _per_chat.set_override(
+                entry = _per_chat.set_enabled(
                     context_id,
-                    enabled=data.get("enabled"),
-                    note=data.get("note"),
+                    enabled=bool(data.get("enabled", True)),
+                    note=str(data.get("note") or ""),
                 )
                 return {"ok": True, "entry": entry}
 
@@ -45,7 +45,7 @@ class HeadroomPerChat(ApiHandler):
                 context_id = str(data.get("context_id") or "")
                 if not context_id:
                     return Response({"ok": False, "error": "context_id required"}, 400)
-                cleared = _per_chat.set_override(context_id, enabled=None)
+                cleared = _per_chat.clear(context_id)
                 return {"ok": True, "cleared": cleared}
 
             return Response({"ok": False, "error": "unknown action"}, 400)

@@ -33,9 +33,15 @@ class CompressText(Tool):
             cfg = _config.get_config(agent=self.agent)
             enabled_flag = bool(cfg.get("enabled", False))
             try:
-                from helpers.plugins import is_plugin_enabled  # type: ignore
+                from helpers.plugins import get_toggle_state  # type: ignore
 
-                toggle_state = "on" if is_plugin_enabled("headroom_compress", agent=self.agent) else "off"
+                state = str(getattr(get_toggle_state("headroom_compress"), "value", "") or "")
+                # ToggleState is a str enum: "enabled" / "disabled" / "always_enabled".
+                toggle_state = {
+                    "enabled": "on",
+                    "always_enabled": "on",
+                    "disabled": "off",
+                }.get(state, "unknown")
             except Exception:  # noqa: BLE001
                 toggle_state = "unknown"
             data = {

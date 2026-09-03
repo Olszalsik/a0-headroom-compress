@@ -219,8 +219,6 @@ def main() -> int:
             extras.append("mcp")
         if cfg.get("expose_compress_tool", True):
             extras.append("proxy")
-        if extras:
-            extras = ["all"]
 
     if not run_pip_install(extras, args.upgrade):
         return 4

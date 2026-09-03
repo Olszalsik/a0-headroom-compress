@@ -98,8 +98,8 @@ class CcrCache:
 
     def _init_sqlite(self) -> None:
         path = self._db_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
             self._db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=NORMAL")
@@ -298,7 +298,7 @@ class CcrCache:
         if self.backend == "sqlite" and self._db is not None:
             try:
                 cur = self._db.execute(
-                    "SELECT blob, original_tokens, compressed_tokens, created_at, source "
+                    "SELECT original, original_tokens, compressed_tokens, created_at, source "
                     "FROM ccr WHERE key = ?",
                     (key,),
                 )

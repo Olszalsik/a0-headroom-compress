@@ -12,6 +12,7 @@ version.
 
 Actions:
   - get       : return the original string for a CCR key (or a not-found msg)
+  - meta      : return rich metadata for a CCR key (no full blob)
   - stats     : return aggregate counters for the CCR cache
   - list      : list recent CCR entries (metadata only, not the blobs)
   - prune     : delete entries older than the configured TTL
@@ -113,6 +114,6 @@ class HeadroomRetrieve(Tool):
             )
 
         return Response(
-            message="Unknown action. Valid: get, stats, list, prune.",
+            message="Unknown action. Valid: get, meta, stats, list, prune.",
             break_loop=False,
         )

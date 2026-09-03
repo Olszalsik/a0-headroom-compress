@@ -307,6 +307,4 @@ export const store = createStore("headroomStore", {
       this.proxyBusy = false;
     }
   },
-
-  },
 });
