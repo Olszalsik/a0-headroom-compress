@@ -15,6 +15,7 @@ v0.4.0 additions:
 from __future__ import annotations
 
 import hashlib
+import re
 import sys
 import time
 from typing import Any
@@ -119,22 +120,48 @@ def _safe_transform(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+# v0.4.5 (P2 coding-profile protect_reads): tool sources whose output is
+# *file content* the agent reasons from. Structural (lossy-capable)
+# compression is skipped for these - lossless whitespace collapse only.
+_PROTECTED_SOURCE_RE = re.compile(
+    r"read|editor|file|cat|view|content", re.IGNORECASE
+)
+
+
 def _normal_transform(text: str, *, level: str, model: str, strategy: str, source: str | None, stats: Any) -> tuple[str | None, str | None]:
-    hr = _load_headroom()
-    if hr is None:
-        return _safe_transform(text), None
+    """Compress a single text via headroom-ai's per-content transforms.
+
+    headroom-ai >= 0.28 replaced the old string-level ``compress(text, level=…)``
+    API with a message-list ``compress(messages, model, config)`` that is a
+    context-window *fit* engine (no-ops until the context approaches the model
+    limit) and a per-content transforms suite.  The old string call raises with
+    today's package, so the plugin silently fell back to whitespace collapse.
+
+    This adapter targets the v0.28 layer that matches this plugin's per-message
+    hooks: ``ContentRouter`` (quality-first: logs/diffs/search results get
+    structural compression, traceback/code pass through untouched; measured
+    95% on repetitive logs, 0% on code) and ``SmartCrusher`` for tabular
+    arrays.  The ``level`` knob is advisory only from 0.28 on — the router
+    self-selects strategy per content type.
+    """
     try:
-        if hasattr(hr, "compress"):
-            result = hr.compress(text, level=level, model=model, strategy=strategy)
-            if isinstance(result, str):
-                return result, None
-            return result.get("compressed_text") or result.get("text") or text, None
-        if hasattr(hr, "Compressor"):
-            c = hr.Compressor(level=level, model=model)
-            return c.compress(text), None
-    except Exception as exc:
-        return None, str(exc)
-    return _safe_transform(text), None
+        if strategy == "smart_crusher":
+            from headroom.transforms.smart_crusher import smart_crush_tool_output
+
+            crushed, was_modified, _info = smart_crush_tool_output(text)
+            if was_modified and crushed:
+                return crushed, None
+        else:
+            from headroom.transforms.content_router import route_and_compress
+
+            routed = route_and_compress(text, context=source or "")
+            if routed and len(routed) < len(text):
+                return routed, None
+    except Exception as exc:  # noqa: BLE001 - never break the agent on compression
+        return _safe_transform(text), str(exc)
+    # Router declined to compress (content type protected, or no net gain) —
+    # return the original so compress_text records an honest 0-saved event.
+    return text, None
 
 
 def compress_text(
@@ -210,7 +237,13 @@ def compress_text(
     compressed: str | None = None
     err: str | None = None
 
-    if mode == "safe":
+    if cfg.get("protect_reads", True) and source and _PROTECTED_SOURCE_RE.search(source):
+        # v0.4.5 (P2 coding-profile protect_reads): file-content tool outputs
+        # are the agent's source of truth - never structurally compressed.
+        # TRACE (arXiv 2608.06503): execution-state mislocalization is the
+        # top compression failure mode; whitespace collapse only (lossless).
+        compressed = _safe_transform(text)
+    elif mode == "safe":
         compressed = _safe_transform(text)
     else:
         compressed, err = _normal_transform(

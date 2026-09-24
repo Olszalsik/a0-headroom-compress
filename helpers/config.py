@@ -42,6 +42,11 @@ _DEFAULTS: dict[str, Any] = {
     "stats_path": "",
     "expose_compress_tool": True,
     "never_compress_system_prompts": True,
+    "protect_reads": True,
+    "clear_old_tool_results": True,
+    "clear_keep_recent": 3,
+    "clear_min_tokens": 300,
+    "clear_exempt_tools": [],
     "verbose": True,
 }
 

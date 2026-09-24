@@ -1,1 +1,1 @@
-headroom-ai>=0.27.0
+headroom-ai>=0.28.0

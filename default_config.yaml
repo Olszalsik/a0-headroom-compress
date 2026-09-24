@@ -79,6 +79,26 @@ expose_compress_tool: true
 # the tool's own arguments. Always true, exposed here for visibility only.
 never_compress_system_prompts: true
 
+# v0.4.5 (P2, coding-profile protect_reads): tool outputs that carry *file
+# content* the agent reasons from (file reads, editor dumps, cat/view results)
+# are never structurally compressed - lossless whitespace collapse only.
+# The headroom research roadmap (tmp/headroom-compression-roadmap-2026-09-24.md)
+# shows execution-state mislocalization is the #1 compression failure mode,
+# so source-of-truth content stays byte-stable (also cache-friendly).
+protect_reads: true
+
+# v0.4.6 (P3, drop-old-tool-results clearing): before each LLM call, replace
+# all but the most recent `clear_keep_recent` tool results with a short
+# placeholder. Lossless-if-refetchable: the original is stored in the CCR
+# cache (headroom_retrieve) and the tool can always be re-run. Only results
+# above `clear_min_tokens` are cleared; `clear_exempt_tools` is a list of
+# tool names never cleared. Evidence: TRACE (arXiv 2608.06503) + Anthropic
+# context editing (clear_tool_uses_20250919, keep-3 default).
+clear_old_tool_results: true
+clear_keep_recent: 3          # most recent N tool results always kept intact
+clear_min_tokens: 300         # only clear results above this size
+clear_exempt_tools: []        # tool names to never clear, e.g. ["code_execution_tool"]
+
 # Diagnostic surface for the user. If false, the plugin stays completely
 # silent (no toasts, no log lines). Default true so users can see it working.
 verbose: true
